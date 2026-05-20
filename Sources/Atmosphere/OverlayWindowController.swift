@@ -6,6 +6,7 @@ final class OverlayWindowController {
     private let simulationEngine: SimulationEngine
     private var windows: [NSWindow] = []
     private var scenes: [AtmosphereScene] = []
+    private var isVisible = false
 
     init(simulationEngine: SimulationEngine) {
         self.simulationEngine = simulationEngine
@@ -18,23 +19,38 @@ final class OverlayWindowController {
     }
 
     func show() {
-        rebuildWindows()
+        if windows.isEmpty {
+            rebuildWindows()
+        }
+        windows.forEach { $0.orderFrontRegardless() }
+        isVisible = true
     }
 
     func hide() {
         windows.forEach { $0.orderOut(nil) }
+        isVisible = false
     }
 
     func update(weatherState: WeatherState, obstacles: [WindowObstacle]) {
+        guard isVisible else { return }
         simulationEngine.update(weatherState: weatherState)
         simulationEngine.update(obstacles: obstacles)
         scenes.forEach { scene in
             scene.weatherState = weatherState
-            scene.obstacles = obstacles.filter { scene.frameInScreenCoordinates.intersects($0.bounds) }
+            scene.obstacles = obstacles
+                .filter { scene.frameInScreenCoordinates.intersects($0.bounds) }
+                .prefix(24)
+                .map { $0 }
         }
     }
 
     @objc private func screenParametersDidChange() {
+        guard isVisible else {
+            windows.forEach { $0.close() }
+            windows.removeAll()
+            scenes.removeAll()
+            return
+        }
         rebuildWindows()
     }
 
@@ -62,6 +78,7 @@ final class OverlayWindowController {
             view.allowsTransparency = true
             view.ignoresSiblingOrder = true
             view.shouldCullNonVisibleNodes = true
+            view.preferredFramesPerSecond = 15
             view.wantsLayer = true
             view.layer?.backgroundColor = NSColor.clear.cgColor
 
@@ -82,7 +99,7 @@ final class AtmosphereScene: SKScene {
     let frameInScreenCoordinates: CGRect
     private let simulationEngine: SimulationEngine
     private var lastUpdateTime: TimeInterval?
-    private var particleNodes: [ObjectIdentifier: SKShapeNode] = [:]
+    private var particleNodes: [SKShapeNode] = []
     private let sunNode = SKShapeNode(rect: .zero)
 
     var weatherState: WeatherState = .clear
@@ -101,7 +118,7 @@ final class AtmosphereScene: SKScene {
     }
 
     override func update(_ currentTime: TimeInterval) {
-        let delta = min(currentTime - (lastUpdateTime ?? currentTime), 1.0 / 20.0)
+        let delta = min(currentTime - (lastUpdateTime ?? currentTime), 1.0 / 15.0)
         lastUpdateTime = currentTime
 
         simulationEngine.step(in: frameInScreenCoordinates, deltaTime: delta)
@@ -117,34 +134,51 @@ final class AtmosphereScene: SKScene {
     }
 
     private func renderParticles() {
-        removeChildren(in: children.filter { $0.name == "particle" })
+        let visibleParticles = simulationEngine.particles.filter {
+            frameInScreenCoordinates.insetBy(dx: -80, dy: -80).contains($0.position)
+        }
 
-        for particle in simulationEngine.particles where frameInScreenCoordinates.insetBy(dx: -80, dy: -80).contains(particle.position) {
+        while particleNodes.count < visibleParticles.count {
+            let node = SKShapeNode()
+            node.name = "particle"
+            node.blendMode = .alpha
+            addChild(node)
+            particleNodes.append(node)
+        }
+
+        if particleNodes.count > visibleParticles.count {
+            for index in visibleParticles.count..<particleNodes.count {
+                particleNodes[index].isHidden = true
+            }
+        }
+
+        for (index, particle) in visibleParticles.enumerated() {
             let local = screenToScene(particle.position)
-            let node: SKShapeNode
+            let node = particleNodes[index]
+            node.isHidden = false
+            node.position = local
             switch particle.kind {
             case .rain:
-                node = SKShapeNode(rectOf: CGSize(width: 1.5, height: 18), cornerRadius: 0.75)
+                node.path = CGPath(roundedRect: CGRect(x: -0.75, y: -9, width: 1.5, height: 18), cornerWidth: 0.75, cornerHeight: 0.75, transform: nil)
                 node.fillColor = NSColor(calibratedRed: 0.55, green: 0.78, blue: 1.0, alpha: 0.52)
                 node.strokeColor = .clear
                 node.zRotation = -0.18
             case .snow:
-                node = SKShapeNode(circleOfRadius: 2.4)
+                node.path = CGPath(ellipseIn: CGRect(x: -2.4, y: -2.4, width: 4.8, height: 4.8), transform: nil)
                 node.fillColor = NSColor.white.withAlphaComponent(0.78)
                 node.strokeColor = .clear
+                node.zRotation = 0
             case .splash:
-                node = SKShapeNode(circleOfRadius: 1.7)
+                node.path = CGPath(ellipseIn: CGRect(x: -1.7, y: -1.7, width: 3.4, height: 3.4), transform: nil)
                 node.fillColor = NSColor(calibratedRed: 0.7, green: 0.9, blue: 1.0, alpha: 0.5)
                 node.strokeColor = .clear
+                node.zRotation = 0
             case .runoff:
-                node = SKShapeNode(rectOf: CGSize(width: 1.2, height: 14), cornerRadius: 0.6)
+                node.path = CGPath(roundedRect: CGRect(x: -0.6, y: -7, width: 1.2, height: 14), cornerWidth: 0.6, cornerHeight: 0.6, transform: nil)
                 node.fillColor = NSColor(calibratedRed: 0.6, green: 0.82, blue: 1.0, alpha: 0.38)
                 node.strokeColor = .clear
+                node.zRotation = 0
             }
-            node.name = "particle"
-            node.position = local
-            node.blendMode = .alpha
-            addChild(node)
         }
     }
 

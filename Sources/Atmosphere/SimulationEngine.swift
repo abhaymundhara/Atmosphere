@@ -22,6 +22,7 @@ enum CollisionResult: Equatable {
 }
 
 final class SimulationEngine {
+    private let maximumParticles = 80
     private(set) var weatherState: WeatherState = .clear
     private(set) var obstacles: [WindowObstacle] = []
     private(set) var particles: [Particle] = []
@@ -59,6 +60,10 @@ final class SimulationEngine {
                 return [particle]
             }
         }
+
+        if particles.count > maximumParticles {
+            particles.removeFirst(particles.count - maximumParticles)
+        }
     }
 
     func classifyCollision(for particle: Particle, obstacles: [WindowObstacle]) -> CollisionResult {
@@ -80,7 +85,12 @@ final class SimulationEngine {
     }
 
     private func spawnParticles(in bounds: CGRect, deltaTime: TimeInterval) {
-        let count = Int((weatherState.intensity * 120 * deltaTime).rounded())
+        guard particles.count < maximumParticles else { return }
+
+        let count = min(
+            maximumParticles - particles.count,
+            Int((weatherState.intensity * 12 * deltaTime).rounded(.up))
+        )
         guard count > 0 else { return }
 
         for _ in 0..<count {
@@ -93,15 +103,15 @@ final class SimulationEngine {
                 particles.append(Particle(
                     kind: .rain,
                     position: CGPoint(x: x, y: bounds.minY - 12),
-                    velocity: CGVector(dx: wind * 24, dy: CGFloat.random(in: 720...980)),
-                    life: 5
+                    velocity: CGVector(dx: wind * 12, dy: CGFloat.random(in: 420...580)),
+                    life: 2.4
                 ))
             case .snow:
                 particles.append(Particle(
                     kind: .snow,
                     position: CGPoint(x: x, y: bounds.minY - 12),
-                    velocity: CGVector(dx: wind * 6 + CGFloat.random(in: -22...22), dy: CGFloat.random(in: 70...145)),
-                    life: 12
+                    velocity: CGVector(dx: wind * 4 + CGFloat.random(in: -14...14), dy: CGFloat.random(in: 55...100)),
+                    life: 5
                 ))
             }
         }
@@ -121,19 +131,19 @@ final class SimulationEngine {
                 kind: .splash,
                 position: particle.position,
                 velocity: CGVector(dx: CGFloat.random(in: -110 ... -40), dy: CGFloat.random(in: -100 ... -30)),
-                life: 0.35
+                life: 0.2
             )
             let splashB = Particle(
                 kind: .splash,
                 position: particle.position,
                 velocity: CGVector(dx: CGFloat.random(in: 40 ... 110), dy: CGFloat.random(in: -100 ... -30)),
-                life: 0.35
+                life: 0.2
             )
             let runoff = Particle(
                 kind: .runoff,
                 position: CGPoint(x: particle.position.x, y: obstacle.bounds.minY + 4),
-                velocity: CGVector(dx: 0, dy: 160),
-                life: 1.6
+                velocity: CGVector(dx: 0, dy: 120),
+                life: 0.9
             )
             return [splashA, splashB, runoff]
         }

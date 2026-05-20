@@ -5,6 +5,17 @@ enum PrecipitationKind: Equatable {
     case none
     case rain
     case snow
+
+    var displayName: String {
+        switch self {
+        case .none:
+            return "Clear"
+        case .rain:
+            return "Rain"
+        case .snow:
+            return "Snow"
+        }
+    }
 }
 
 struct WeatherState: Equatable {
@@ -14,6 +25,31 @@ struct WeatherState: Equatable {
     var windDirectionDegrees: Double
     var isSunny: Bool
     var temperatureCelsius: Double?
+
+    var dashboardCondition: String {
+        if precipitation != .none {
+            return precipitation.displayName
+        }
+
+        return isSunny ? "Sunny" : "Cloudy"
+    }
+
+    var menuSymbolName: String {
+        switch precipitation {
+        case .rain:
+            return windSpeedMetersPerSecond >= 12 ? "cloud.rain.fill" : "cloud.drizzle.fill"
+        case .snow:
+            return "snowflake"
+        case .none:
+            return isSunny ? "sun.max.fill" : "cloud.fill"
+        }
+    }
+
+    var statusSummary: String {
+        let temperature = temperatureCelsius.map { "\(Int($0.rounded())) C" } ?? "--"
+        let wind = "\(Int(windSpeedMetersPerSecond.rounded())) m/s"
+        return "\(dashboardCondition) | \(temperature) | Wind \(wind)"
+    }
 
     static let clear = WeatherState(
         precipitation: .none,

@@ -1,5 +1,6 @@
 .build/
 dist/
 .omx/
+tmp/
 .DS_Store
 *.xcuserstate

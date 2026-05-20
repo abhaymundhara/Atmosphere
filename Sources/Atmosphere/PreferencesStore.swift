@@ -12,11 +12,14 @@ final class PreferencesStore {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        if defaults.object(forKey: Keys.debugMode) == nil {
+            defaults.set(DebugWeatherMode.rain.rawValue, forKey: Keys.debugMode)
+        }
         if defaults.object(forKey: Keys.intensityMultiplier) == nil {
             defaults.set(1.0, forKey: Keys.intensityMultiplier)
         }
         if defaults.object(forKey: Keys.overlayEnabled) == nil {
-            defaults.set(true, forKey: Keys.overlayEnabled)
+            defaults.set(false, forKey: Keys.overlayEnabled)
         }
     }
 

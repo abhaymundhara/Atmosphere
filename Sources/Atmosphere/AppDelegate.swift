@@ -1,7 +1,6 @@
 import AppKit
 import Foundation
 
-@main
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let preferences = PreferencesStore()
@@ -12,33 +11,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var overlayController: OverlayWindowController?
     private var settingsController: SettingsWindowController?
+    private var controlWindowController: ControlWindowController?
     private var statusItem: NSStatusItem?
     private var refreshTimer: Timer?
     private var geometryTimer: Timer?
     private var weatherState: WeatherState = .clear
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
+        NSApp.setActivationPolicy(.regular)
 
         overlayController = OverlayWindowController(simulationEngine: simulationEngine)
         settingsController = SettingsWindowController(preferences: preferences)
         settingsController?.onChange = { [weak self] in
             self?.applyPreferences()
         }
+        controlWindowController = ControlWindowController()
+        controlWindowController?.onOpenDashboard = { [weak self] in
+            self?.showSettings()
+        }
 
         buildStatusMenu()
-        overlayController?.show()
+        controlWindowController?.show()
         applyPreferences()
         startTimers()
+        showSettings()
         Task { await refreshWeather() }
     }
 
     private func buildStatusMenu() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.title = "Atmosphere"
+        item.button?.image = NSImage(systemSymbolName: "sun.max.fill", accessibilityDescription: "Atmosphere")
+        item.button?.image?.isTemplate = true
+        item.button?.title = " Atmosphere"
 
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Settings", action: #selector(showSettings), keyEquivalent: ","))
+        menu.addItem(NSMenuItem(title: "Open Dashboard", action: #selector(showSettings), keyEquivalent: ","))
         menu.addItem(NSMenuItem(title: "Refresh Weather", action: #selector(refreshWeatherFromMenu), keyEquivalent: "r"))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Atmosphere", action: #selector(quit), keyEquivalent: "q"))
@@ -50,14 +57,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 900, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refreshWeather() }
         }
-        geometryTimer = Timer.scheduledTimer(withTimeInterval: 0.16, repeats: true) { [weak self] _ in
+        geometryTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refreshGeometry() }
         }
     }
 
     private func refreshGeometry() {
         let obstacles = geometryProvider.currentObstacles()
-        overlayController?.update(weatherState: effectiveWeatherState(), obstacles: obstacles)
+        let state = effectiveWeatherState()
+        overlayController?.update(weatherState: state, obstacles: obstacles)
+        settingsController?.update(weatherState: state)
+        controlWindowController?.update(weatherState: state)
+        updateStatusItem(weatherState: state)
     }
 
     private func effectiveWeatherState() -> WeatherState {
@@ -69,6 +80,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func applyPreferences() {
         preferences.overlayEnabled ? overlayController?.show() : overlayController?.hide()
         refreshGeometry()
+    }
+
+    private func updateStatusItem(weatherState: WeatherState) {
+        statusItem?.button?.image = NSImage(
+            systemSymbolName: weatherState.menuSymbolName,
+            accessibilityDescription: weatherState.dashboardCondition
+        )
+        statusItem?.button?.image?.isTemplate = true
+        statusItem?.button?.title = " \(weatherState.dashboardCondition)"
+        statusItem?.button?.toolTip = weatherState.statusSummary
     }
 
     private func refreshWeather() async {
@@ -97,5 +118,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
     }
 }
