@@ -37,6 +37,8 @@ final class ControlWindowController {
         window.backgroundColor = .clear
         window.isOpaque = false
         window.hasShadow = true
+        window.animationBehavior = .none
+        window.isReleasedWhenClosed = false
         window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
         window.contentView = makeContentView(frame: contentRect)
         return window

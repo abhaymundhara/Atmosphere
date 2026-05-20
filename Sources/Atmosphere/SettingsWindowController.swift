@@ -30,6 +30,7 @@ final class SettingsWindowController {
         panel.title = "Atmosphere Dashboard"
         panel.center()
         panel.contentView = makeContentView()
+        panel.animationBehavior = .none
         panel.isReleasedWhenClosed = false
         window = panel
         panel.makeKeyAndOrderFront(nil)
